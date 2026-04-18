@@ -1,17 +1,22 @@
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from database import Base
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String)
-    gender = Column(String)  
-    email = Column(String, unique=True)
-    student_id = Column(String)
+    name = Column(String, nullable=False)
+    gender = Column(String)
+    email = Column(String, unique=True, index=True)
+    student_id = Column(String, nullable=False)
     academic_level = Column(Integer)
-    password = Column(String)
+    password = Column(String, nullable=False)
     profile_image = Column(String)
+
+    tasks = relationship("Task", back_populates="user")
+
+
 class Task(Base):
     __tablename__ = "tasks"
 
@@ -21,4 +26,6 @@ class Task(Base):
     due_date = Column(String, nullable=False)
     priority = Column(String)
     is_completed = Column(Boolean, default=False)
-    user_id = Column(Integer)
+
+    user_id = Column(Integer, ForeignKey("users.id"))
+    user = relationship("User", back_populates="tasks")
