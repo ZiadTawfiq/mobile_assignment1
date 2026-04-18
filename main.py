@@ -1,10 +1,12 @@
 from datetime import datetime
+import os
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 import models, schemas
 from database import engine, SessionLocal
 
+# create tables
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -18,7 +20,10 @@ def get_db():
         db.close()
 
 
-# ================= Auth =================
+
+
+
+# ================= AUTH =================
 @app.post("/signup")
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
@@ -68,7 +73,8 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
         "user_id": db_user.id
     }
 
-# ================= Profile =================
+
+# ================= PROFILE =================
 @app.get("/profile/{user_id}")
 def get_profile(user_id: int, db: Session = Depends(get_db)):
 
@@ -88,15 +94,40 @@ def update_profile(user_id: int, updated: schemas.UserUpdate, db: Session = Depe
     if not user:
         raise HTTPException(404, "User not found")
 
+    if not updated.name.strip():
+        raise HTTPException(400, "Name cannot be empty")
+
+    if updated.gender not in [None, "Male", "Female"]:
+        raise HTTPException(400, "Invalid gender")
+
+    if updated.academic_level not in [None, 1, 2, 3, 4]:
+        raise HTTPException(400, "Invalid academic level")
+
+    if updated.email:
+        if not updated.email.endswith("@stud.fci-cu.edu.eg"):
+            raise HTTPException(400, "Invalid FCI email")
+
+        existing = db.query(models.User).filter(models.User.email == updated.email).first()
+        if existing and existing.id != user_id:
+            raise HTTPException(400, "Email already exists")
+
+    if updated.student_id:
+        if updated.email and updated.student_id not in updated.email:
+            raise HTTPException(400, "Student ID mismatch")
+
     user.name = updated.name
     user.gender = updated.gender
     user.academic_level = updated.academic_level
 
+    if updated.email:
+        user.email = updated.email
+
+    if updated.student_id:
+        user.student_id = updated.student_id
+
     db.commit()
 
     return {"message": "Profile updated"}
-
-
 @app.post("/profile/{user_id}/upload")
 def upload_image(user_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
 
@@ -104,6 +135,12 @@ def upload_image(user_id: int, file: UploadFile = File(...), db: Session = Depen
 
     if not user:
         raise HTTPException(404, "User not found")
+
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(400, "File must be an image")
+
+    # create folder if not exists
+    os.makedirs("images", exist_ok=True)
 
     file_path = f"images/{file.filename}"
 
@@ -115,15 +152,14 @@ def upload_image(user_id: int, file: UploadFile = File(...), db: Session = Depen
 
     return {"message": "Image uploaded"}
 
-# ================= Tasks =================
+
+# ================= TASKS =================
 @app.post("/tasks")
 def add_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
 
-    # validate priority
     if task.priority not in ["Low", "Medium", "High"]:
         raise HTTPException(400, "Invalid priority")
 
-    # validate due date
     try:
         datetime.strptime(task.due_date, "%Y-%m-%d")
     except:
@@ -151,11 +187,9 @@ def update_task(task_id: int, task: schemas.TaskCreate, db: Session = Depends(ge
     if not db_task:
         raise HTTPException(404, "Task not found")
 
-    # validate priority
     if task.priority not in ["Low", "Medium", "High"]:
         raise HTTPException(400, "Invalid priority")
 
-    # validate due date
     try:
         datetime.strptime(task.due_date, "%Y-%m-%d")
     except:
@@ -195,4 +229,5 @@ def complete_task(task_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Task completed"}
+
 
