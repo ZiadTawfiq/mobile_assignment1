@@ -258,4 +258,62 @@ def complete_task(task_id: int, db: Session = Depends(get_db)):
 
     return {"message": "Task completed"}
 
+@app.patch("/tasks/{task_id}/add-favorite")
+def add_favorite(task_id: int, db: Session = Depends(get_db)):
 
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.is_favorite = True
+    db.commit()
+
+    return {
+        "message": "Added to favorites",
+        "is_favorite": True
+    }
+
+@app.patch("/tasks/{task_id}/remove-favorite")
+def remove_favorite(task_id: int, db: Session = Depends(get_db)):
+
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task.is_favorite = False
+    db.commit()
+
+    return {
+        "message": "Removed from favorites",
+        "is_favorite": False
+    }
+
+@app.get("/tasks/{user_id}/favorites")
+def get_favorites(user_id: int, db: Session = Depends(get_db)):
+
+    return db.query(models.Task).filter(
+        models.Task.user_id == user_id,
+        models.Task.is_favorite == True
+    ).all()
+from datetime import datetime
+
+@app.get("/tasks/{task_id}/deadline")
+def get_deadline(task_id: int, db: Session = Depends(get_db)):
+
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+
+    if not task:
+        raise HTTPException(404, "Task not found")
+
+    due_date = datetime.strptime(task.due_date, "%Y-%m-%d")
+    now = datetime.now()
+
+    remaining = (due_date.date() - now.date()).days
+
+    return {
+        "due_date": task.due_date,
+        "today": now.strftime("%Y-%m-%d"),
+        "remaining_days": remaining
+    }
