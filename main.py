@@ -1,5 +1,12 @@
 from datetime import datetime
+from fastapi.staticfiles import StaticFiles
 import os
+import uuid
+from fastapi import UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+
+UPLOAD_DIR = "images"
+BASE_URL = "https://mobileassignment1-production.up.railway.app"
 
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
@@ -18,9 +25,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-
 
 
 # ================= AUTH =================
@@ -128,30 +132,52 @@ def update_profile(user_id: int, updated: schemas.UserUpdate, db: Session = Depe
     db.commit()
 
     return {"message": "Profile updated"}
+
+
+# ================= UPLOAD IMAGE =================
 @app.post("/profile/{user_id}/upload")
-def upload_image(user_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_image(user_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
 
     if not user:
-        raise HTTPException(404, "User not found")
+        raise HTTPException(status_code=404, detail="User not found")
 
     if not file.content_type.startswith("image/"):
-        raise HTTPException(400, "File must be an image")
+        raise HTTPException(status_code=400, detail="File must be an image")
 
-    # create folder if not exists
-    os.makedirs("images", exist_ok=True)
+    # create folder
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    file_path = f"images/{file.filename}"
+    # read file
+    content = await file.read()
 
+    # limit size (2MB)
+    if len(content) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Image too large")
+
+    # generate unique name
+    file_extension = file.filename.split(".")[-1]
+    filename = f"{uuid.uuid4()}.{file_extension}"
+
+    file_path = f"{UPLOAD_DIR}/{filename}"
+
+    # save image
     with open(file_path, "wb") as f:
-        f.write(file.file.read())
+        f.write(content)
 
+    # save in DB
     user.profile_image = file_path
     db.commit()
 
-    return {"message": "Image uploaded"}
+    return {
+        "message": "Image uploaded",
+        "image_url": f"{BASE_URL}/images/{filename}"
+    }
 
+
+# static files
+app.mount("/images", StaticFiles(directory="images"), name="images")
 
 # ================= TASKS =================
 @app.post("/tasks")
