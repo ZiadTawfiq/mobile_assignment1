@@ -18,6 +18,10 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
+os.makedirs("images", exist_ok=True)
+
+app.mount("/images", StaticFiles(directory="images"), name="images")
+
 # ================= DB =================
 def get_db():
     db = SessionLocal()
@@ -176,8 +180,6 @@ async def upload_image(user_id: int, file: UploadFile = File(...), db: Session =
     }
 
 
-# static files
-app.mount("/images", StaticFiles(directory="images"), name="images")
 
 # ================= TASKS =================
 @app.post("/tasks")
