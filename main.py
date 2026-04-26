@@ -152,35 +152,30 @@ async def upload_image(user_id: int, file: UploadFile = File(...), db: Session =
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
 
-    # create folder
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # read file
     content = await file.read()
 
-    # limit size (2MB)
     if len(content) > 2 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image too large")
 
-    # generate unique name
     file_extension = file.filename.split(".")[-1]
     filename = f"{uuid.uuid4()}.{file_extension}"
 
     file_path = f"{UPLOAD_DIR}/{filename}"
 
-    # save image
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # save in DB
-    user.profile_image = file_path
+    image_url = f"{BASE_URL}/images/{filename}"
+
+    user.profile_image = image_url
     db.commit()
 
     return {
         "message": "Image uploaded",
-        "image_url": f"{BASE_URL}/images/{filename}"
+        "image_url": image_url
     }
-
 
 
 # ================= TASKS =================
