@@ -33,3 +33,16 @@ class UserUpdate(BaseModel):
     student_id: Optional[str] = None
 
 
+
+class Task(BaseModel):
+    id: int
+    title: str
+    description: str | None = None
+    due_date: str
+    priority: str
+    is_completed: bool
+    is_favorite: bool
+    user_id: int
+
+    class Config:
+        from_attributes = True

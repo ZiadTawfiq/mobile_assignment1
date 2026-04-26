@@ -1,9 +1,11 @@
-from datetime import datetime
 from fastapi.staticfiles import StaticFiles
 import os
 import uuid
 from fastapi import UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
+from datetime import datetime
+from typing import List
+
 
 UPLOAD_DIR = "images"
 BASE_URL = "https://mobileassignment1-production.up.railway.app"
@@ -201,7 +203,8 @@ def add_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
     return {"message": "Task added"}
 
 
-@app.get("/tasks/{user_id}")
+
+@app.get("/users/{user_id}/tasks", response_model=List[schemas.Task])
 def get_tasks(user_id: int, db: Session = Depends(get_db)):
 
     return db.query(models.Task).filter(models.Task.user_id == user_id).all()
@@ -290,14 +293,14 @@ def remove_favorite(task_id: int, db: Session = Depends(get_db)):
         "is_favorite": False
     }
 
-@app.get("/tasks/{user_id}/favorites")
+@app.get("/users/{user_id}/favorites")
 def get_favorites(user_id: int, db: Session = Depends(get_db)):
 
     return db.query(models.Task).filter(
         models.Task.user_id == user_id,
         models.Task.is_favorite == True
     ).all()
-from datetime import datetime
+
 
 @app.get("/tasks/{task_id}/deadline")
 def get_deadline(task_id: int, db: Session = Depends(get_db)):
