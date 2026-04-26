@@ -1,30 +1,37 @@
-from fastapi.staticfiles import StaticFiles
 import os
 import uuid
-from fastapi import UploadFile, File, HTTPException, Depends
-from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import List
 
-
-UPLOAD_DIR = "images"
-BASE_URL = "https://mobileassignment1-production.up.railway.app"
-
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+
 import models, schemas
 from database import engine, SessionLocal
 
-# create tables
+# ================= INIT =================
+
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
-os.makedirs("images", exist_ok=True)
+# ================= PATHS =================
 
-app.mount("/images", StaticFiles(directory="images"), name="images")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_DIR = os.path.join(BASE_DIR, "images")
+
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+app.mount("/images", StaticFiles(directory=UPLOAD_DIR), name="images")
+
+BASE_URL = os.getenv(
+    "BASE_URL",
+    "https://mobileassignment1-production.up.railway.app"
+)
 
 # ================= DB =================
+
 def get_db():
     db = SessionLocal()
     try:
@@ -32,8 +39,8 @@ def get_db():
     finally:
         db.close()
 
-
 # ================= AUTH =================
+
 @app.post("/signup")
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
@@ -83,8 +90,8 @@ def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
         "user_id": db_user.id
     }
 
-
 # ================= PROFILE =================
+
 @app.get("/profile/{user_id}")
 def get_profile(user_id: int, db: Session = Depends(get_db)):
 
@@ -93,7 +100,14 @@ def get_profile(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(404, "User not found")
 
-    return user
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "gender": user.gender,
+        "academic_level": user.academic_level,
+        "profile_image": user.profile_image
+    }
 
 
 @app.put("/profile/{user_id}")
@@ -121,48 +135,41 @@ def update_profile(user_id: int, updated: schemas.UserUpdate, db: Session = Depe
         if existing and existing.id != user_id:
             raise HTTPException(400, "Email already exists")
 
-    if updated.student_id:
-        if updated.email and updated.student_id not in updated.email:
-            raise HTTPException(400, "Student ID mismatch")
-
-    user.name = updated.name
-    user.gender = updated.gender
-    user.academic_level = updated.academic_level
-
-    if updated.email:
         user.email = updated.email
 
     if updated.student_id:
         user.student_id = updated.student_id
 
+    user.name = updated.name
+    user.gender = updated.gender
+    user.academic_level = updated.academic_level
+
     db.commit()
 
     return {"message": "Profile updated"}
 
-
 # ================= UPLOAD IMAGE =================
+
 @app.post("/profile/{user_id}/upload")
 async def upload_image(user_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     user = db.query(models.User).filter(models.User.id == user_id).first()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(404, "User not found")
 
     if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File must be an image")
-
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
+        raise HTTPException(400, "File must be an image")
 
     content = await file.read()
 
     if len(content) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Image too large")
+        raise HTTPException(400, "Image too large")
 
     file_extension = file.filename.split(".")[-1]
     filename = f"{uuid.uuid4()}.{file_extension}"
 
-    file_path = f"{UPLOAD_DIR}/{filename}"
+    file_path = os.path.join(UPLOAD_DIR, filename)
 
     with open(file_path, "wb") as f:
         f.write(content)
@@ -177,8 +184,8 @@ async def upload_image(user_id: int, file: UploadFile = File(...), db: Session =
         "image_url": image_url
     }
 
-
 # ================= TASKS =================
+
 @app.post("/tasks")
 def add_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
 
@@ -198,10 +205,8 @@ def add_task(task: schemas.TaskCreate, db: Session = Depends(get_db)):
     return {"message": "Task added"}
 
 
-
 @app.get("/users/{user_id}/tasks", response_model=List[schemas.Task])
 def get_tasks(user_id: int, db: Session = Depends(get_db)):
-
     return db.query(models.Task).filter(models.Task.user_id == user_id).all()
 
 
@@ -256,21 +261,20 @@ def complete_task(task_id: int, db: Session = Depends(get_db)):
 
     return {"message": "Task completed"}
 
+
 @app.patch("/tasks/{task_id}/add-favorite")
 def add_favorite(task_id: int, db: Session = Depends(get_db)):
 
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
 
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(404, "Task not found")
 
     task.is_favorite = True
     db.commit()
 
-    return {
-        "message": "Added to favorites",
-        "is_favorite": True
-    }
+    return {"message": "Added to favorites", "is_favorite": True}
+
 
 @app.patch("/tasks/{task_id}/remove-favorite")
 def remove_favorite(task_id: int, db: Session = Depends(get_db)):
@@ -278,22 +282,20 @@ def remove_favorite(task_id: int, db: Session = Depends(get_db)):
     task = db.query(models.Task).filter(models.Task.id == task_id).first()
 
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(404, "Task not found")
 
     task.is_favorite = False
     db.commit()
 
-    return {
-        "message": "Removed from favorites",
-        "is_favorite": False
-    }
+    return {"message": "Removed from favorites", "is_favorite": False}
+
 
 @app.get("/users/{user_id}/favorites")
 def get_favorites(user_id: int, db: Session = Depends(get_db)):
 
     return db.query(models.Task).filter(
         models.Task.user_id == user_id,
-        models.Task.is_favorite == True
+        models.Task.is_favorite.is_(True)
     ).all()
 
 
